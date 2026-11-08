@@ -3,11 +3,9 @@ name: Numéro du jour
 # Collecte les articles puis fait rédiger le numéro par l'IA.
 # - Lancement manuel (onglet Actions > Numéro du jour > Run workflow) : le numéro est
 #   enregistré dans le dossier issues/ du dépôt.
-# - Sur une pull request qui touche au code : numéro d'essai, téléchargeable, non enregistré.
+# Pas de lancement sur les pull requests : chaque numéro consomme le quota gratuit du jour.
 on:
   workflow_dispatch:
-  pull_request:
-    paths: ["newsletter/**", "sources.yaml", ".github/workflows/issue.yml"]
 
 permissions:
   contents: write

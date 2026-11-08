@@ -10,7 +10,7 @@ la publie sur un site et l'envoie par mail. Gratuit, et indépendant de tout ser
 | --- | --- | --- |
 | 1 | Collecte des sources (flux RSS) | fait |
 | 2 | Rédaction du numéro par une IA gratuite | en cours |
-| 3 | Site (GitHub Pages) et envoi par mail | à faire |
+| 3 | Site (GitHub Pages) et envoi par mail | en cours |
 | 4 | Exécution automatique chaque matin | à faire |
 
 ## Les sources
@@ -43,3 +43,11 @@ enregistré dans le dossier [`issues/`](issues/).
 Le numéro contient 10 à 12 brèves, trois dossiers (géopolitique, économie, tech), une fiche
 pays (les 197 pays passent chacun leur tour) et une liste de sujets à surveiller, pour environ
 30 minutes de lecture. Les analyses et newsletters sont prises sur 7 jours, le reste sur 24 heures.
+
+## Le site
+
+Adresse : https://marechalantoine03-hub.github.io/newletter/
+
+Le site est reconstruit après chaque numéro : le dernier numéro en page d'accueil, et tous les
+anciens dans « Archives ». Réglage à faire une fois : Settings > Pages > Source : **GitHub Actions**.
+Pour le voir en local : `python -m newsletter.site` puis ouvrir `_site/index.html`.

@@ -89,8 +89,10 @@ Réponds en JSON exactement sous cette forme :
   "breves": [{{"theme": "geopolitique|economie|tech", "titre": "...", "ids": [..]}}],
   "a_surveiller": [{{"titre": "...", "ids": [..]}}]
 }}
-Contraintes : exactement 3 dossiers (un par thème), chacun avec 4 à 10 articles venant si
-possible d'au moins 2 régions ; 10 à 12 brèves sur des sujets différents des dossiers, chacune
+Contraintes : exactement 3 dossiers (un par thème) sur 3 sujets nettement différents ; le
+dossier « economie » porte sur l'économie (commerce, finance, énergie, emploi, politique
+économique), pas sur la technologie ; chaque dossier a 4 à 10 articles venant si possible
+d'au moins 2 régions ; 10 à 12 brèves sur des sujets différents des dossiers, chacune
 avec 1 à 4 articles ; 3 sujets « à surveiller » dans les jours qui viennent. Les titres sont en
 français. N'utilise que des ids de la liste."""
     return llm.generate_json(prompt, system=SYSTEM)

@@ -1,0 +1,51 @@
+name: Site
+
+# Reconstruit et publie le site (GitHub Pages) :
+# - après chaque « Numéro du jour » réussi sur la branche principale,
+# - après un changement du code du site ou d'un numéro,
+# - à la main (onglet Actions > Site > Run workflow).
+on:
+  workflow_run:
+    workflows: ["Numéro du jour", "Récupérer un numéro"]
+    types: [completed]
+    branches: [main]
+  push:
+    branches: [main]
+    paths: ["issues/**", "newsletter/site.py", ".github/workflows/site.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -r requirements.txt
+      - run: python -m newsletter.site
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
