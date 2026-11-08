@@ -27,7 +27,11 @@ import feedparser
 import yaml
 
 ROOT = Path(__file__).resolve().parent.parent
-USER_AGENT = "Mozilla/5.0 (compatible; newsletter-collector/1.0; +https://github.com/)"
+USER_AGENT = (
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 14_0) AppleWebKit/537.36 "
+    "(KHTML, like Gecko) Chrome/130.0 Safari/537.36 newsletter-collector/1.0"
+)
+GOOGLE_NEWS = "https://news.google.com/rss/search?q=site:{site}+when:1d&hl=en-US&gl=US&ceid=US:en"
 TIMEOUT_S = 20
 SUMMARY_MAX_CHARS = 600
 
@@ -67,23 +71,32 @@ def entry_time(entry) -> datetime | None:
     return None
 
 
-def fetch(source: dict, since: datetime) -> tuple[dict, list[Article]]:
-    report = {"name": source["name"], "url": source["url"], "status": "ok", "count": 0, "error": None}
-    try:
-        request = urllib.request.Request(source["url"], headers={"User-Agent": USER_AGENT})
-        with urllib.request.urlopen(request, timeout=TIMEOUT_S) as response:
-            body = response.read()
-        feed = feedparser.parse(body)
-        if feed.bozo and not feed.entries:
-            raise ValueError(f"flux illisible : {feed.bozo_exception}")
-    except Exception as exc:  # une source en panne ne doit jamais bloquer les autres
-        report.update(status="erreur", error=str(exc)[:200])
-        return report, []
+def candidate_urls(source: dict) -> list[str]:
+    """Adresse principale, puis adresses de secours, puis Google News limité au site."""
+    urls = [source["url"], *source.get("fallback_urls", [])]
+    if source.get("site"):
+        urls.append(GOOGLE_NEWS.format(site=source["site"]))
+    return urls
 
-    articles = []
+
+def read_feed(url: str):
+    request = urllib.request.Request(url, headers={"User-Agent": USER_AGENT, "Accept": "*/*"})
+    with urllib.request.urlopen(request, timeout=TIMEOUT_S) as response:
+        body = response.read()
+    feed = feedparser.parse(body)
+    if feed.bozo and not feed.entries:
+        raise ValueError(f"flux illisible : {feed.bozo_exception}")
+    return feed
+
+
+def recent_articles(feed, source: dict, since: datetime) -> tuple[list[Article], int]:
+    articles, undated = [], 0
     for entry in feed.entries:
         published = entry_time(entry)
-        if published is None or published < since:
+        if published is None:
+            undated += 1
+            continue
+        if published < since:
             continue
         title = clean_text(entry.get("title", ""))
         link = entry.get("link", "")
@@ -102,10 +115,31 @@ def fetch(source: dict, since: datetime) -> tuple[dict, list[Article]]:
                 topics=list(source.get("topics", [])),
             )
         )
-    report["count"] = len(articles)
-    if not articles:
-        report["status"] = "vide"
-    return report, articles
+    return articles, undated
+
+
+def fetch(source: dict, since: datetime) -> tuple[dict, list[Article]]:
+    """Essaie chaque adresse jusqu'à obtenir des articles récents. Une panne ne bloque jamais les autres sources."""
+    report = {"name": source["name"], "url": source["url"], "status": "vide", "count": 0, "error": None, "detail": ""}
+    attempts = []
+    for url in candidate_urls(source):
+        try:
+            feed = read_feed(url)
+        except Exception as exc:
+            attempts.append(f"{url} -> {str(exc)[:120]}")
+            continue
+        articles, undated = recent_articles(feed, source, since)
+        attempts.append(f"{url} -> {len(feed.entries)} entrées, {len(articles)} récentes, {undated} sans date")
+        if articles:
+            report.update(status="ok", count=len(articles), url=url)
+            if url != source["url"]:
+                report["status"] = "secours"
+            report["detail"] = attempts[-1]
+            return report, articles
+    if all("->" in a and "entrées" not in a for a in attempts):
+        report["status"] = "erreur"
+    report["error"] = " | ".join(attempts)
+    return report, []
 
 
 def dedupe(articles: list[Article]) -> list[Article]:
@@ -144,11 +178,14 @@ def main(argv: list[str] | None = None) -> int:
     )
     (day_dir / "sources.json").write_text(json.dumps(reports, ensure_ascii=False, indent=1), encoding="utf-8")
 
-    ok = sum(r["status"] == "ok" for r in reports)
+    ok = sum(r["count"] > 0 for r in reports)
     print(f"{len(articles)} articles sur {args.hours} h, {ok}/{len(reports)} sources avec des articles.")
-    for r in sorted(reports, key=lambda r: (r["status"] != "erreur", r["name"])):
-        detail = r["error"] if r["status"] == "erreur" else f"{r['count']} articles"
-        print(f"  [{r['status']:>6}] {r['name']}: {detail}")
+    order = {"erreur": 0, "vide": 1, "secours": 2, "ok": 3}
+    for r in sorted(reports, key=lambda r: (order[r["status"]], r["name"])):
+        detail = r["error"] if r["count"] == 0 else f"{r['count']} articles"
+        if r["status"] == "secours":
+            detail += f" (via {r['url']})"
+        print(f"  [{r['status']:>7}] {r['name']}: {detail}")
     by_region: dict[str, int] = {}
     for a in articles:
         by_region[a.region] = by_region.get(a.region, 0) + 1
