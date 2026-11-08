@@ -52,7 +52,7 @@ def load_articles(day_dir: Path) -> list[dict]:
 
 
 def article_line(a: dict) -> str:
-    summary = a["summary"][:160]
+    summary = a["summary"][:100]
     return f'{a["id"]} | {a["source"]} ({a["region"]}, {a["type"]}) | {a["title"]} — {summary}'
 
 

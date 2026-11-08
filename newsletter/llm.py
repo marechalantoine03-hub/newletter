@@ -18,7 +18,7 @@ API_URL = "https://generativelanguage.googleapis.com/v1beta/models/{model}:gener
 MODELS_URL = "https://generativelanguage.googleapis.com/v1beta/models?pageSize=1000"
 EXCLUDED = ("lite", "image", "tts", "audio", "live", "embedding", "thinking", "exp", "preview", "8b")
 _resolved_model: str | None = None
-TIMEOUT_S = 300
+TIMEOUT_S = 600
 RETRIES = 4
 
 
@@ -75,12 +75,14 @@ def generate(prompt: str, *, system: str = "", as_json: bool = False, temperatur
 
     last_error = ""
     for attempt in range(RETRIES):
+        started = time.monotonic()
         try:
             with urllib.request.urlopen(request, timeout=TIMEOUT_S) as response:
                 payload = json.loads(response.read())
             parts = payload["candidates"][0]["content"]["parts"]
             text = "".join(p.get("text", "") for p in parts).strip()
             if text:
+                print(f"    réponse en {time.monotonic() - started:.0f} s")
                 return text
             last_error = f"réponse vide : {json.dumps(payload)[:300]}"
         except urllib.error.HTTPError as exc:
@@ -90,6 +92,7 @@ def generate(prompt: str, *, system: str = "", as_json: bool = False, temperatur
                 break  # erreur de clé ou de requête : inutile de réessayer
         except (urllib.error.URLError, TimeoutError, KeyError, IndexError) as exc:
             last_error = str(exc)
+        print(f"    tentative {attempt + 1}/{RETRIES} échouée : {last_error[:200]}")
         time.sleep(15 * (attempt + 1))  # quota gratuit : on laisse passer la minute
     raise LLMError(f"Échec de l'appel à {model} : {last_error}")
 
