@@ -1,7 +1,8 @@
 """Appel au modèle d'IA (API Google Gemini, offre gratuite), sans bibliothèque externe.
 
 La clé est lue dans la variable d'environnement GEMINI_API_KEY (un secret GitHub).
-Le modèle se change avec GEMINI_MODEL, sans toucher au code.
+Le modèle se fixe avec GEMINI_MODEL ; sinon, le plus récent des modèles « flash » stables
+proposés à la clé est choisi automatiquement (Google retire régulièrement les anciens).
 """
 
 from __future__ import annotations
@@ -14,7 +15,9 @@ import urllib.error
 import urllib.request
 
 API_URL = "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
-DEFAULT_MODEL = "gemini-2.5-flash"
+MODELS_URL = "https://generativelanguage.googleapis.com/v1beta/models?pageSize=1000"
+EXCLUDED = ("lite", "image", "tts", "audio", "live", "embedding", "thinking", "exp", "preview", "8b")
+_resolved_model: str | None = None
 TIMEOUT_S = 300
 RETRIES = 4
 
@@ -23,11 +26,37 @@ class LLMError(RuntimeError):
     pass
 
 
+def _version(name: str) -> tuple:
+    return tuple(int(n) for n in re.findall(r"\d+", name.split("/")[-1])[:3])
+
+
+def resolve_model(key: str) -> str:
+    """Modèle fixé par GEMINI_MODEL, sinon le plus récent modèle flash stable disponible."""
+    global _resolved_model
+    if os.environ.get("GEMINI_MODEL"):
+        return os.environ["GEMINI_MODEL"]
+    if _resolved_model:
+        return _resolved_model
+    request = urllib.request.Request(MODELS_URL, headers={"x-goog-api-key": key})
+    with urllib.request.urlopen(request, timeout=60) as response:
+        models = json.loads(response.read()).get("models", [])
+    candidates = [
+        m["name"].split("/")[-1] for m in models
+        if "generateContent" in m.get("supportedGenerationMethods", [])
+        and "flash" in m["name"] and not any(x in m["name"] for x in EXCLUDED)
+    ]
+    if not candidates:
+        raise LLMError("Aucun modèle Gemini flash disponible pour cette clé ; fixer GEMINI_MODEL.")
+    _resolved_model = max(candidates, key=_version)
+    print(f"    Modèle choisi : {_resolved_model}")
+    return _resolved_model
+
+
 def generate(prompt: str, *, system: str = "", as_json: bool = False, temperature: float = 0.4) -> str:
     key = os.environ.get("GEMINI_API_KEY")
     if not key:
         raise LLMError("La variable GEMINI_API_KEY est absente (secret GitHub à créer).")
-    model = os.environ.get("GEMINI_MODEL") or DEFAULT_MODEL
+    model = resolve_model(key)
 
     body: dict = {
         "contents": [{"role": "user", "parts": [{"text": prompt}]}],

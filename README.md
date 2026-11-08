@@ -35,7 +35,7 @@ python -m newsletter.collect --hours 24
 
 Il faut une clé gratuite de l'API Gemini, enregistrée dans les secrets du dépôt sous le nom
 `GEMINI_API_KEY` (Settings > Secrets and variables > Actions). Pour changer de modèle, créer
-une variable `GEMINI_MODEL` au même endroit (par défaut : `gemini-2.5-flash`).
+une variable `GEMINI_MODEL` au même endroit (par défaut, le plus récent modèle « flash » stable est choisi automatiquement).
 
 Sur GitHub : onglet **Actions** > **Numéro du jour** > **Run workflow**. Le numéro est
 enregistré dans le dossier [`issues/`](issues/).
