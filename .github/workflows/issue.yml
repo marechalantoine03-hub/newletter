@@ -1,0 +1,55 @@
+name: Numéro du jour
+
+# Collecte les articles puis fait rédiger le numéro par l'IA.
+# - Lancement manuel (onglet Actions > Numéro du jour > Run workflow) : le numéro est
+#   enregistré dans le dossier issues/ du dépôt.
+# - Sur une pull request qui touche au code : numéro d'essai, téléchargeable, non enregistré.
+on:
+  workflow_dispatch:
+  pull_request:
+    paths: ["newsletter/**", "sources.yaml", ".github/workflows/issue.yml"]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: numero-du-jour-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  issue:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+      GEMINI_MODEL: ${{ vars.GEMINI_MODEL }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -r requirements.txt
+      - name: Collecter les articles
+        run: python -m newsletter.collect
+      - name: Vérifier la clé Gemini
+        if: env.GEMINI_API_KEY == ''
+        run: echo "::warning::Secret GEMINI_API_KEY absent, la rédaction est sautée."
+      - name: Rédiger le numéro
+        if: env.GEMINI_API_KEY != ''
+        run: python -m newsletter.write
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: numero
+          path: |
+            issues/
+            data/
+      - name: Enregistrer le numéro dans le dépôt
+        if: github.event_name == 'workflow_dispatch' && env.GEMINI_API_KEY != ''
+        run: |
+          git config user.name "newsletter-bot"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add issues/
+          git commit -m "Numéro du $(date -u +%F)" || exit 0
+          git push

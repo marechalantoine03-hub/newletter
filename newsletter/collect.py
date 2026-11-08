@@ -3,6 +3,7 @@
 Usage :
     python -m newsletter.collect               # dernières 24 heures
     python -m newsletter.collect --hours 36
+    (les analyses et newsletters sont prises sur 7 jours, voir --long-hours)
 
 Écrit :
     data/AAAA-MM-JJ/articles.json   les articles retenus, triés du plus récent au plus ancien
@@ -34,6 +35,7 @@ USER_AGENT = (
 GOOGLE_NEWS = "https://news.google.com/rss/search?q=site:{site}+when:1d&hl=en-US&gl=US&ceid=US:en"
 TIMEOUT_S = 20
 SUMMARY_MAX_CHARS = 600
+LONG_WINDOW_TYPES = {"analyse", "newsletter"}
 
 
 @dataclass
@@ -156,16 +158,23 @@ def dedupe(articles: list[Article]) -> list[Article]:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--hours", type=int, default=24)
+    parser.add_argument(
+        "--long-hours", type=int, default=168,
+        help="fenêtre pour les analyses et newsletters, qui publient moins souvent",
+    )
     parser.add_argument("--sources", type=Path, default=ROOT / "sources.yaml")
     parser.add_argument("--out", type=Path, default=ROOT / "data")
     args = parser.parse_args(argv)
 
     now = datetime.now(timezone.utc)
     since = now - timedelta(hours=args.hours)
+    since_long = now - timedelta(hours=args.long_hours)
     sources = load_sources(args.sources)
 
     with ThreadPoolExecutor(max_workers=12) as pool:
-        results = list(pool.map(lambda s: fetch(s, since), sources))
+        results = list(pool.map(
+            lambda s: fetch(s, since_long if s["type"] in LONG_WINDOW_TYPES else since), sources
+        ))
 
     reports = [r for r, _ in results]
     articles = dedupe([a for _, batch in results for a in batch])

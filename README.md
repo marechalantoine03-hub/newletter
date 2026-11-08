@@ -8,8 +8,8 @@ la publie sur un site et l'envoie par mail. Gratuit, et indépendant de tout ser
 
 | Phase | Contenu | État |
 | --- | --- | --- |
-| 1 | Collecte des sources (flux RSS) | en cours |
-| 2 | Rédaction du numéro par une IA gratuite | à faire |
+| 1 | Collecte des sources (flux RSS) | fait |
+| 2 | Rédaction du numéro par une IA gratuite | en cours |
 | 3 | Site (GitHub Pages) et envoi par mail | à faire |
 | 4 | Exécution automatique chaque matin | à faire |
 
@@ -30,3 +30,16 @@ En local :
 pip install -r requirements.txt
 python -m newsletter.collect --hours 24
 ```
+
+## Rédiger un numéro
+
+Il faut une clé gratuite de l'API Gemini, enregistrée dans les secrets du dépôt sous le nom
+`GEMINI_API_KEY` (Settings > Secrets and variables > Actions). Pour changer de modèle, créer
+une variable `GEMINI_MODEL` au même endroit (par défaut : `gemini-2.5-flash`).
+
+Sur GitHub : onglet **Actions** > **Numéro du jour** > **Run workflow**. Le numéro est
+enregistré dans le dossier [`issues/`](issues/).
+
+Le numéro contient 10 à 12 brèves, trois dossiers (géopolitique, économie, tech), une fiche
+pays (les 197 pays passent chacun leur tour) et une liste de sujets à surveiller, pour environ
+30 minutes de lecture. Les analyses et newsletters sont prises sur 7 jours, le reste sur 24 heures.
