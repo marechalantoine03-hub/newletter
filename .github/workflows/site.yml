@@ -6,7 +6,7 @@ name: Site
 # - à la main (onglet Actions > Site > Run workflow).
 on:
   workflow_run:
-    workflows: ["Numéro du jour"]
+    workflows: ["Numéro du jour", "Récupérer un numéro"]
     types: [completed]
     branches: [main]
   push:

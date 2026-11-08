@@ -19,7 +19,7 @@ MODELS_URL = "https://generativelanguage.googleapis.com/v1beta/models?pageSize=1
 EXCLUDED = ("lite", "image", "tts", "audio", "live", "embedding", "thinking", "exp", "preview", "8b")
 _resolved_model: str | None = None
 TIMEOUT_S = 600
-RETRIES = 4
+RETRIES = 6
 
 
 class LLMError(RuntimeError):
@@ -74,6 +74,7 @@ def generate(prompt: str, *, system: str = "", as_json: bool = False, temperatur
     )
 
     last_error = ""
+    wait = 0
     for attempt in range(RETRIES):
         started = time.monotonic()
         try:
@@ -86,15 +87,32 @@ def generate(prompt: str, *, system: str = "", as_json: bool = False, temperatur
                 return text
             last_error = f"réponse vide : {json.dumps(payload)[:300]}"
         except urllib.error.HTTPError as exc:
-            detail = exc.read().decode("utf-8", "replace")[:300]
-            last_error = f"HTTP {exc.code} : {detail}"
+            detail = exc.read().decode("utf-8", "replace")
+            last_error = f"HTTP {exc.code} : {_error_message(detail)}"
+            delay = re.search(r'"retryDelay":\s*"(\d+)', detail)
+            wait = int(delay.group(1)) + 5 if delay else 0
             if exc.code not in (429, 500, 502, 503, 504):
                 break  # erreur de clé ou de requête : inutile de réessayer
         except (urllib.error.URLError, TimeoutError, KeyError, IndexError) as exc:
             last_error = str(exc)
-        print(f"    tentative {attempt + 1}/{RETRIES} échouée : {last_error[:200]}")
-        time.sleep(15 * (attempt + 1))  # quota gratuit : on laisse passer la minute
+        print(f"    tentative {attempt + 1}/{RETRIES} échouée : {last_error[:600]}")
+        if "PerDay" in last_error:
+            break  # quota du jour épuisé : attendre ne sert à rien
+        # quota gratuit : on attend le délai indiqué par Google, sinon de plus en plus longtemps
+        time.sleep(min(wait or 30 * (attempt + 1), 180))
+        wait = 0
     raise LLMError(f"Échec de l'appel à {model} : {last_error}")
+
+
+def _error_message(detail: str) -> str:
+    """Message d'erreur lisible, avec le nom du quota dépassé s'il y en a un."""
+    try:
+        error = json.loads(detail)["error"]
+    except (ValueError, KeyError, TypeError):
+        return detail[:600]
+    quotas = re.findall(r'"quotaId":\s*"([^"]+)"', detail)
+    message = error.get("message", "").split("\n")[0]
+    return message + (f" [quotas : {', '.join(sorted(set(quotas)))}]" if quotas else "")
 
 
 def generate_json(prompt: str, *, system: str = "", temperature: float = 0.2):
